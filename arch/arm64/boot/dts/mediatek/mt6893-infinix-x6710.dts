@@ -206,14 +206,6 @@
 };
 */
 
-&usbphy {
-    status = "okay";
-};
-
-&u2port {
-    status = "okay";
-};
-
 &u3phy0 {
     status = "okay";
 };
