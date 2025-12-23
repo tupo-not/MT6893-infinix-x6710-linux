@@ -184,7 +184,7 @@
                 };
         };
 };
-
+/*
 &u2port0 {
 	status = "okay";
 };
@@ -203,4 +203,25 @@
 
 &usbphy {
 	status = "okay";
+};
+*/
+
+&usbphy {
+    status = "okay";
+};
+
+&u2port {
+    status = "okay";
+};
+
+&u3phy0 {
+    status = "okay";
+};
+
+&u2port0 {
+    status = "okay";
+};
+
+&u3port0 {
+    status = "okay";
 };
