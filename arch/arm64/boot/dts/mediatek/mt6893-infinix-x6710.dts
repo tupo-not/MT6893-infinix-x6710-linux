@@ -12,7 +12,7 @@
                 #size-cells = <2>;
                 ranges;
 
-                bootargs = "PMOS_NOSPLASH console=tty0 console=ttyGS0 clk_ignore_unused regulator_ignore_unused pd_ignore_unused loglevel=7 debug";
+                bootargs = "PMOS_NOSPLASH console=tty0 console=ttyS0,921600 clk_ignore_unused regulator_ignore_unused pd_ignore_unused loglevel=7 debug";
 
                 framebuffer@76a10000 {
                         compatible = "simple-framebuffer";
@@ -184,27 +184,6 @@
                 };
         };
 };
-/*
-&u2port0 {
-	status = "okay";
-};
-
-&u2port {
-	status = "okay";
-};
-
-&u3phy0 {
-	status = "okay";
-};
-
-&uart0 {
-	status = "okay";
-};
-
-&usbphy {
-	status = "okay";
-};
-*/
 
 &u3phy0 {
     status = "okay";
@@ -215,5 +194,9 @@
 };
 
 &u3port0 {
+    status = "okay";
+};
+
+&uart0 {
     status = "okay";
 };
