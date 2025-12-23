@@ -807,7 +807,7 @@ static const unsigned int mt6893_pull_type[] = {
 };
 
 static const char * const mt6893_pinctrl_register_base_name[] = {
-	"base", "rm", "bm", "bl", "br", "lm", "lb", "rt", "lt", "tl",
+	"base", "rm", "bm", "lm", "lb", "rt", "lt", "tm",
 };
 
 static const struct mtk_pin_reg_calc mt6893_reg_cals[PINCTRL_PIN_REG_MAX] = {

@@ -510,16 +510,13 @@
 			      <0 0x11e70000 0 0x1000>, <0 0x11ea0000 0 0x1000>,
 			      <0 0x11f20000 0 0x1000>, <0 0x11f30000 0 0x1000>,
 			      <0 0x1000b000 0 0x1000>;
-			reg-names = "iocfg0", "iocfg_rm",
-				    "iocfg_bm", "iocfg_lm",
-				    "iocfg_lb", "iocfg_rt",
-				    "iocfg_lt", "iocfg_tm",
-				    "eint";
+			reg-names = "base", "rm", "bm", "lm", "lb", "rt", "lt", "tm";
 			gpio-controller;
 			#gpio-cells = <2>;
 			gpio-ranges = <&pio 0 0 220>;
-			interrupt-controller;
+			interrupt-parent = <&gic>;
 			interrupts = <GIC_SPI 212 IRQ_TYPE_LEVEL_HIGH 0>;
+			interrupt-controller;
 			#interrupt-cells = <2>;
 		};
 
