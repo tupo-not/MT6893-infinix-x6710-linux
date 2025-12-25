@@ -1030,68 +1030,6 @@
 			status = "disabled";
 		};
 
-		ssusb: usb0@11201000 {
-			compatible = "mediatek,mtu3";
-			reg = <0 0x11201000 0 0x2dff>, <0 0x11203e00 0 0x0100>;
-			reg-names = "mac", "ippc";
-			ranges = <0 0 0 0x11200000 0 0x3f00>;
-			interrupts = <GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH 0>;
-			#phy-cells = <1>;
-			phys = <&u2port0 PHY_TYPE_USB2>, <&u3port0 PHY_TYPE_USB3>;
-			clocks = <&infracfg CLK_INFRA_AO_SSUSB>,
-				<&topckgen CLK_TOP_USB_TOP_SEL>,
-				<&clk26m>,
-				<&clk26m>,
-				<&infracfg CLK_INFRA_AO_SSUSB_XHCI>;
-			clock-names = "sys_ck", "ref_ck", "mcu_ck", "dma_ck", "xhci_ck";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			mediatek,syscon-wakeup = <&topckgen 0x214 105>;
-			wakeup-source;
-			maximum-speed = "high-speed";
-			mediatek,u3p-dis-msk = <1>;
-
-			usb_host: xhci0@11200000 {
-				compatible = "mediatek,mtk-xhci";
-				reg = <0x11200000 0x1000>;
-				reg-names = "mac";
-				interrupts = <GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH 0>;
-				clocks = <&clk26m>;
-				clock-names = "sys_ck";
-
-				port {
-					usb_role: endpoint {
-						remote-endpoint = <&mtu3_drd_switch>;
-					};
-				};
-			};
-		};
-
-/*
-usbphy: t-phy@11f40000 {
-	compatible = "mediatek,mt6785-tphy", "mediatek,generic-tphy-v2";
-	#address-cells = <1>;
-	#size-cells = <1>;
-	ranges = <0x0 0x11f40000 0x1000>;
-	status = "disabled";
-
-	u2port: usb-phy@0 {
-		reg = <0x0 0x700>;
-		clocks = <&clk26m>;
-		clock-names = "ref";
-		#phy-cells = <1>;
-		mediatek,software-role-switch;
-		status = "disabled";
-
-		port {
-			mtu3_drd_switch: endpoint {
-				remote-endpoint = <&usb_role>;
-			};
-		};
-	};
-};
-*/
-
 		u3phy0: phy@11e40000 {
 			compatible = "mediatek,mt6893-tphy", "mediatek,generic-tphy-v2";
 			#address-cells = <1>;
@@ -1104,13 +1042,6 @@ usbphy: t-phy@11f40000 {
 				clocks = <&clk26m>;
 				clock-names = "ref";
 				#phy-cells = <1>;
-				mediatek,software-role-switch;
-
-				port {
-					mtu3_drd_switch: endpoint {
-						remote-endpoint = <&usb_role>;
-					};
-				};
 			};
 
 			u3port0: usb-phy@700 {
@@ -1123,8 +1054,44 @@ usbphy: t-phy@11f40000 {
 				nvmem-cell-names = "intr", "rx_imp", "tx_imp";
 				#phy-cells = <1>;
 			};
-		};		
-		
+		};
+
+		ssusb: usb@11201000 {
+			compatible = "mediatek,mt6893-mtu3", "mediatek,mtu3";
+			reg = <0 0x11201000 0 0x2dff>, <0 0x11203e00 0 0x0100>;
+			reg-names = "mac", "ippc";
+			ranges = <0 0 0 0x11200000 0 0x4000>;
+			interrupts = <GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH 0>;
+			phys = <&u2port0 PHY_TYPE_USB2>, <&u3port0 PHY_TYPE_USB3>;
+			clocks = <&infracfg CLK_INFRA_AO_SSUSB>,
+				<&topckgen CLK_TOP_USB_TOP_SEL>,
+				<&clk26m>,
+				<&clk26m>,
+				<&infracfg CLK_INFRA_AO_SSUSB_XHCI>;
+			clock-names = "sys_ck", "ref_ck", "mcu_ck", "dma_ck", "xhci_ck";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			mediatek,syscon-wakeup = <&topckgen 0x214 105>;
+			wakeup-source;
+			usb-role-switch;
+			role-switch-default-mode = "host";
+			status = "disabled";
+
+			usb_host: usb@0 {
+				compatible = "mediatek,mt6893-xhci", "mediatek,mtk-xhci";
+				reg = <0x0 0x1000>;
+				reg-names = "mac";
+				interrupts = <GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH 0>;
+				clocks = <&infracfg CLK_INFRA_AO_SSUSB_XHCI>;
+				clock-names = "sys_ck";
+
+				connector {
+					compatible = "usb-a-connector";
+					type = "A";
+				};
+			};
+		};
+
 		mmc0: mmc@11230000 {
 			compatible = "mediatek,mt6893-mmc", "mediatek,mt8183-mmc";
 			reg = <0 0x11230000 0 0x10000>, <0 0x11f50000 0 0x1000>;
