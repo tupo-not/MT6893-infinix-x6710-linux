@@ -18,6 +18,9 @@
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
+#include <linux/usb/role.h>
+#include <linux/usb/otg.h>
+#include <linux/workqueue.h>
 
 #include "phy-mtk-io.h"
 
@@ -111,11 +114,17 @@
 
 #define U3P_U2PHYDTM1		0x06C
 #define P2C_RG_UART_EN			BIT(16)
+#define P2C_FORCE_IDPULLUP	BIT(8)
 #define P2C_FORCE_IDDIG		BIT(9)
+#define P2C_FORCE_AVALID	BIT(10)
+#define P2C_FORCE_SESSEND	BIT(12)
+#define P2C_FORCE_VBUSVALID	BIT(13)
 #define P2C_RG_VBUSVALID		BIT(5)
 #define P2C_RG_SESSEND			BIT(4)
+#define P2C_RG_BVALID			BIT(3)
 #define P2C_RG_AVALID			BIT(2)
 #define P2C_RG_IDDIG			BIT(1)
+#define P2C_RG_IDPULLUP			BIT(0)
 
 #define U3P_U2PHYBC12C		0x080
 #define P2C_RG_CHGDT_EN		BIT(0)
@@ -317,6 +326,8 @@ struct mtk_phy_instance {
 		struct u3phy_banks u3_banks;
 	};
 	struct clk_bulk_data clks[TPHY_CLKS_CNT];
+	struct delayed_work dr_work;
+	struct usb_role_switch *role_switch;
 	u32 index;
 	u32 type;
 	struct regmap *type_sw;
@@ -326,14 +337,17 @@ struct mtk_phy_instance {
 	u32 efuse_intr;
 	u32 efuse_tx_imp;
 	u32 efuse_rx_imp;
+	int current_role;
 	int eye_src;
 	int eye_vrt;
 	int eye_term;
 	int intr;
 	int discth;
 	int pre_emphasis;
+	int sw_get_retries;
 	bool bc12_en;
 	bool type_force_mode;
+	bool software_role_switch;
 };
 
 struct mtk_tphy {
@@ -738,9 +752,6 @@ static void hs_slew_rate_calibrate(struct mtk_tphy *tphy,
 		/* if FM detection fail, set default value */
 		calibration_val = 4;
 	}
-	dev_dbg(tphy->dev, "phy:%d, fm_out:%d, calib:%d (clk:%d, coef:%d)\n",
-		instance->index, fm_out, calibration_val,
-		tphy->src_ref_clk, tphy->src_coef);
 
 	/* set HS slew rate */
 	mtk_phy_update_field(com + U3P_USBPHYACR5, PA5_RG_U2_HSTX_SRCTRL,
@@ -795,8 +806,6 @@ static void u3_phy_instance_init(struct mtk_tphy *tphy,
 	mtk_phy_update_field(phyd + U3P_U3_PHYD_RXDET1, P3D_RG_RXDET_STB2_SET, 0x10);
 
 	mtk_phy_update_field(phyd + U3P_U3_PHYD_RXDET2, P3D_RG_RXDET_STB2_SET_P3, 0x10);
-
-	dev_dbg(tphy->dev, "%s(%d)\n", __func__, instance->index);
 }
 
 static void u2_phy_pll_26m_set(struct mtk_tphy *tphy,
@@ -818,12 +827,120 @@ static void u2_phy_pll_26m_set(struct mtk_tphy *tphy,
 			 P2R_RG_U2PLL_FRA_EN | P2R_RG_U2PLL_REFCLK_SEL);
 }
 
+static void u2_phy_instance_role_set(struct mtk_phy_instance *instance,
+	int role)
+{
+	struct u2phy_banks *u2_banks = &instance->u2_banks;
+	void __iomem *com = u2_banks->com;
+
+	instance->current_role = role;
+
+	/* end session before role switch */
+	mtk_phy_set_bits(com + U3P_U2PHYDTM1, P2C_RG_SESSEND);
+	mdelay(5);
+	mtk_phy_clear_bits(com + U3P_U2PHYDTM1, P2C_RG_SESSEND);
+
+	switch (role) {
+	case USB_ROLE_DEVICE:
+		mtk_phy_set_bits(com + U3P_U2PHYDTM1, P2C_RG_IDDIG);
+		break;
+	case USB_ROLE_HOST:
+		mtk_phy_clear_bits(com + U3P_U2PHYDTM1, P2C_RG_IDDIG);
+		break;
+	default:
+		break;
+	}
+}
+
+static void u2_phy_role_switch_work(struct work_struct *work)
+{
+	struct mtk_phy_instance *instance =
+		container_of(work, struct mtk_phy_instance, dr_work.work);
+	int role;
+
+	if (IS_ERR_OR_NULL(instance->role_switch))
+		instance->role_switch = usb_role_switch_get(&instance->phy->dev);
+
+	if (IS_ERR_OR_NULL(instance->role_switch)) {
+		if (instance->sw_get_retries >= 10) {
+			dev_warn(&instance->phy->dev, "failed to get role switch\n");
+			return;
+		}
+
+		instance->sw_get_retries += 1;
+		schedule_delayed_work(&instance->dr_work, msecs_to_jiffies(500));
+	}
+
+	role = usb_role_switch_get_role(instance->role_switch);
+
+	if (instance->current_role == role)
+		goto reschedule_work;
+
+	u2_phy_instance_role_set(instance, role);
+
+reschedule_work:
+	schedule_delayed_work(&instance->dr_work, msecs_to_jiffies(100));
+}
+
+static int u2_phy_software_role_switch_init(struct mtk_phy_instance *instance)
+{
+	struct fwnode_handle *ep, *remote_ep, *usb_fwnode;
+	struct device *usb_dev;
+	int mode;
+
+	instance->sw_get_retries = 0;
+
+	ep = fwnode_graph_get_endpoint_by_id(dev_fwnode(&instance->phy->dev),
+		0,
+		0,
+		FWNODE_GRAPH_ENDPOINT_NEXT);
+	if (!ep) {
+		return -ENODEV;
+	}
+
+	remote_ep = fwnode_graph_get_remote_endpoint(ep);
+	fwnode_handle_put(ep);
+	if (!remote_ep) {
+		return -ENODEV;
+	}
+
+	usb_fwnode = fwnode_graph_get_port_parent(remote_ep);
+	fwnode_handle_put(remote_ep);
+
+	if (!usb_fwnode) {
+		return -ENODEV;
+	}
+
+	usb_dev = bus_find_device_by_fwnode(&platform_bus_type, usb_fwnode);
+	fwnode_handle_put(usb_fwnode);
+	if (!usb_dev) {
+		return -ENODEV;
+	}
+
+	mode = usb_get_role_switch_default_mode(usb_dev);
+	if (mode == USB_DR_MODE_HOST)
+		u2_phy_instance_role_set(instance, USB_ROLE_HOST);
+	else
+		u2_phy_instance_role_set(instance, USB_ROLE_DEVICE);
+
+	INIT_DELAYED_WORK(&instance->dr_work, u2_phy_role_switch_work);
+
+	return 0;
+}
+
 static void u2_phy_instance_init(struct mtk_tphy *tphy,
 	struct mtk_phy_instance *instance)
 {
 	struct u2phy_banks *u2_banks = &instance->u2_banks;
 	void __iomem *com = u2_banks->com;
 	u32 index = instance->index;
+	int ret;
+
+	if (instance->software_role_switch) {
+		ret = u2_phy_software_role_switch_init(instance);
+		if (ret)
+			dev_warn(&instance->phy->dev, "failed to initialize role switching\n");
+	}
 
 	/* switch to USB function, and enable usb pll */
 	mtk_phy_clear_bits(com + U3P_U2PHYDTM0, P2C_FORCE_UART_EN | P2C_FORCE_SUSPENDM);
@@ -861,7 +978,11 @@ static void u2_phy_instance_init(struct mtk_tphy *tphy,
 	/* Workaround only for mt8195, HW fix it for others (V3) */
 	u2_phy_pll_26m_set(tphy, instance);
 
-	dev_dbg(tphy->dev, "%s(%d)\n", __func__, index);
+	mtk_phy_set_bits(com + U3P_U2PHYDTM1, P2C_FORCE_IDPULLUP
+				| P2C_FORCE_IDDIG | P2C_FORCE_AVALID | P2C_FORCE_VBUSVALID
+				| P2C_FORCE_SESSEND);
+			mtk_phy_set_bits(com + U3P_U2PHYDTM1, P2C_RG_IDPULLUP | P2C_RG_BVALID);
+
 }
 
 static void u2_phy_instance_power_on(struct mtk_tphy *tphy,
@@ -883,7 +1004,19 @@ static void u2_phy_instance_power_on(struct mtk_tphy *tphy,
 
 		mtk_phy_set_bits(com + U3P_U2PHYDTM0, P2C_RG_SUSPENDM | P2C_FORCE_SUSPENDM);
 	}
-	dev_dbg(tphy->dev, "%s(%d)\n", __func__, index);
+
+	if (instance->software_role_switch) {
+		/* Set FORCE modes for manual role switching */
+		mtk_phy_set_bits(com + U3P_U2PHYDTM1, P2C_FORCE_IDPULLUP
+			| P2C_FORCE_IDDIG | P2C_FORCE_AVALID | P2C_FORCE_VBUSVALID
+			| P2C_FORCE_SESSEND);
+		mtk_phy_set_bits(com + U3P_U2PHYDTM1, P2C_RG_IDPULLUP | P2C_RG_BVALID);
+
+		if (!instance->role_switch) {
+			schedule_delayed_work(&instance->dr_work, msecs_to_jiffies(100));
+		}
+	}
+
 }
 
 static void u2_phy_instance_power_off(struct mtk_tphy *tphy,
@@ -906,7 +1039,10 @@ static void u2_phy_instance_power_off(struct mtk_tphy *tphy,
 		mtk_phy_clear_bits(com + U3D_U2PHYDCR0, P2C_RG_SIF_U2PLL_FORCE_ON);
 	}
 
-	dev_dbg(tphy->dev, "%s(%d)\n", __func__, index);
+	if (instance->role_switch) {
+		cancel_delayed_work_sync(&instance->dr_work);
+	}
+
 }
 
 static void u2_phy_instance_exit(struct mtk_tphy *tphy,
@@ -940,6 +1076,9 @@ static void u2_phy_instance_set_mode(struct mtk_tphy *tphy,
 		tmp &= ~P2C_RG_IDDIG;
 		break;
 	case PHY_MODE_USB_OTG:
+		/* We are managing role in workqueue */
+		if (instance->software_role_switch)
+			return;
 		tmp &= ~(P2C_FORCE_IDDIG | P2C_RG_IDDIG);
 		break;
 	default:
@@ -995,7 +1134,6 @@ static void pcie_phy_instance_init(struct mtk_tphy *tphy,
 
 	/* wait for PCIe subsys register to active */
 	usleep_range(2500, 3000);
-	dev_dbg(tphy->dev, "%s(%d)\n", __func__, instance->index);
 }
 
 static void pcie_phy_instance_power_on(struct mtk_tphy *tphy,
@@ -1065,7 +1203,6 @@ static void sata_phy_instance_init(struct mtk_tphy *tphy,
 
 	mtk_phy_update_field(phyd + ANA_EQ_EYE_CTRL_SIGNAL1, RG_EQ_DLEQ_LFI_GEN1_MSK, 0x03);
 
-	dev_dbg(tphy->dev, "%s(%d)\n", __func__, instance->index);
 }
 
 static void phy_v1_banks_init(struct mtk_tphy *tphy,
@@ -1129,6 +1266,11 @@ static void phy_parse_property(struct mtk_tphy *tphy,
 	if (instance->type == PHY_TYPE_USB3)
 		instance->type_force_mode = device_property_read_bool(dev, "mediatek,force-mode");
 
+	instance->software_role_switch = device_property_read_bool(dev, "mediatek,software-role-switch");
+	if (instance->software_role_switch) {
+		dev_info(dev, "software role switch enabled\n");
+	}
+
 	if (instance->type != PHY_TYPE_USB2)
 		return;
 
@@ -1145,11 +1287,6 @@ static void phy_parse_property(struct mtk_tphy *tphy,
 				 &instance->discth);
 	device_property_read_u32(dev, "mediatek,pre-emphasis",
 				 &instance->pre_emphasis);
-	dev_dbg(dev, "bc12:%d, src:%d, vrt:%d, term:%d, intr:%d, disc:%d\n",
-		instance->bc12_en, instance->eye_src,
-		instance->eye_vrt, instance->eye_term,
-		instance->intr, instance->discth);
-	dev_dbg(dev, "pre-emp:%d\n", instance->pre_emphasis);
 }
 
 static void u2_phy_props_set(struct mtk_tphy *tphy,
@@ -1281,7 +1418,6 @@ static int phy_efuse_get(struct mtk_tphy *tphy, struct mtk_phy_instance *instanc
 			break;
 		}
 
-		dev_dbg(dev, "u2 efuse - intr %x\n", instance->efuse_intr);
 		break;
 
 	case PHY_TYPE_USB3:
@@ -1313,8 +1449,6 @@ static int phy_efuse_get(struct mtk_tphy *tphy, struct mtk_phy_instance *instanc
 			break;
 		}
 
-		dev_dbg(dev, "u3 efuse - intr %x, rx_imp %x, tx_imp %x\n",
-			instance->efuse_intr, instance->efuse_rx_imp,instance->efuse_tx_imp);
 		break;
 	default:
 		dev_err(dev, "no sw efuse for type %d\n", instance->type);
@@ -1617,6 +1751,11 @@ static int mtk_tphy_probe(struct platform_device *pdev)
 		struct device *subdev;
 		struct phy *phy;
 		int retval;
+
+		// filter non-phy nodes (e.g. endpoints)
+		if (!of_find_property(child_np, "reg", NULL)) {
+			continue;
+		}
 
 		instance = devm_kzalloc(dev, sizeof(*instance), GFP_KERNEL);
 		if (!instance)

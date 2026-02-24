@@ -12,7 +12,7 @@
                 #size-cells = <2>;
                 ranges;
 
-                bootargs = "PMOS_NOSPLASH console=tty0 console=ttyS0,921600 clk_ignore_unused regulator_ignore_unused pd_ignore_unused loglevel=7 debug";
+                bootargs = "console=tty0 console=ttyS0,921600 clk_ignore_unused regulator_ignore_unused pd_ignore_unused loglevel=7";
 
                 framebuffer@76a10000 {
                         compatible = "simple-framebuffer";
@@ -183,18 +183,41 @@
                         no-map;
                 };
         };
+
+	ufs_dummy_vcc: regulator-ufs-vcc {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_ufs_vcc";
+
+		regulator-min-microvolt = <2900000>;
+		regulator-max-microvolt = <2900000>;
+
+		regulator-always-on;
+		regulator-boot-on;
+	};
 };
 
-&u3phy0 {
-    status = "okay";
+&usb_phy {
+	status = "okay";
 };
 
-&u2port0 {
-    status = "okay";
+&usb_host {
+	status = "okay";
 };
 
-&u3port0 {
-    status = "okay";
+&ssusb {
+	status = "okay";
+	dr_mode = "peripheral";
+	maximum-speed = "high-speed";
+	mediatek,u3p-dis-msk = <1>;
+};
+
+&ufsphy {
+	status = "okay";
+};
+
+&ufs {
+	status = "okay";
+	vcc-supply = <&ufs_dummy_vcc>;
 };
 
 &uart0 {

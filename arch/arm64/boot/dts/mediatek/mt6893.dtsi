@@ -1030,7 +1030,7 @@
 			status = "disabled";
 		};
 
-		u3phy0: phy@11e40000 {
+		usb_phy: phy@11e40000 {
 			compatible = "mediatek,mt6893-tphy", "mediatek,generic-tphy-v2";
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -1060,36 +1060,59 @@
 			compatible = "mediatek,mt6893-mtu3", "mediatek,mtu3";
 			reg = <0 0x11201000 0 0x2dff>, <0 0x11203e00 0 0x0100>;
 			reg-names = "mac", "ippc";
-			ranges = <0 0 0 0x11200000 0 0x4000>;
 			interrupts = <GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH 0>;
 			phys = <&u2port0 PHY_TYPE_USB2>, <&u3port0 PHY_TYPE_USB3>;
-			clocks = <&infracfg CLK_INFRA_AO_SSUSB>,
-				<&topckgen CLK_TOP_USB_TOP_SEL>,
-				<&clk26m>,
-				<&clk26m>,
-				<&infracfg CLK_INFRA_AO_SSUSB_XHCI>;
-			clock-names = "sys_ck", "ref_ck", "mcu_ck", "dma_ck", "xhci_ck";
+			clocks = <&topckgen CLK_TOP_USB_TOP_SEL>,
+				 <&infracfg CLK_INFRA_AO_SSUSB>,
+				 <&infracfg CLK_INFRA_AO_SSUSB_XHCI>;
+			clock-names = "sys_ck", "ref_ck", "xhci_ck";
 			#address-cells = <1>;
 			#size-cells = <1>;
 			mediatek,syscon-wakeup = <&topckgen 0x214 105>;
 			wakeup-source;
-			usb-role-switch;
-			role-switch-default-mode = "host";
 			status = "disabled";
 
-			usb_host: usb@0 {
+			usb_host: usb@11200000 {
 				compatible = "mediatek,mt6893-xhci", "mediatek,mtk-xhci";
-				reg = <0x0 0x1000>;
+				reg = <0 0x11200000 0 0x1000>;
 				reg-names = "mac";
-				interrupts = <GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH 0>;
-				clocks = <&infracfg CLK_INFRA_AO_SSUSB_XHCI>;
-				clock-names = "sys_ck";
-
-				connector {
-					compatible = "usb-a-connector";
-					type = "A";
-				};
+				interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH 0>;
+				clocks = <&topckgen CLK_TOP_USB_TOP_SEL>,
+					 <&infracfg CLK_INFRA_AO_SSUSB>,
+					 <&infracfg CLK_INFRA_AO_SSUSB_XHCI>;
+				clock-names = "sys_ck", "ref_ck", "xhci_ck";
+				status = "disabled";
 			};
+		};
+
+		ufsphy: ufs-phy@11fa0000 {
+			compatible = "mediatek,mt6893-ufsphy",
+				     "mediatek,mt8183-ufsphy";
+			reg = <0 0x11fa0000 0 0xc000>;
+			clocks = <&infracfg CLK_INFRA_AO_UNIPRO_SYSCLK>,
+				 <&infracfg CLK_INFRA_AO_UFS_MP_SAP_BCLK>;
+			clock-names = "unipro", "mp";
+			#phy-cells = <0>;
+
+			status = "disabled";
+		};
+
+		ufs: ufs@11270000 {
+			compatible = "mediatek,mt6893-ufshci",
+				     "mediatek,mt8183-ufshci";
+			reg = <0 0x11270000 0 0x2300>;
+			interrupts = <GIC_SPI 105 IRQ_TYPE_LEVEL_HIGH 0>;
+			phys = <&ufsphy>;
+
+			status = "disabled";
+
+			clocks = <&infracfg CLK_INFRA_AO_UFS>,
+				 <&topckgen CLK_TOP_UFS_SEL>;
+			clock-names = "ufs", "ufs_sel";
+			freq-table-hz = <0 0>, <0 0>;
+
+			mediatek,ufs-disable-mcq;
+			mediatek,ufs-broken-vcc;
 		};
 
 		mmc0: mmc@11230000 {
