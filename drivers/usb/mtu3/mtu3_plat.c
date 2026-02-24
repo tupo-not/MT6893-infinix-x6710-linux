@@ -31,10 +31,10 @@ int ssusb_check_clocks(struct ssusb_mtk *ssusb, u32 ex_clks)
 
 	ret = readl_poll_timeout(ibase + U3D_SSUSB_IP_PW_STS1, value,
 			(check_val == (value & check_val)), 100, 20000);
-	if (ret) {
+	/*if (ret) {
 		dev_err(ssusb->dev, "clks of sts1 are not stable!\n");
 		return ret;
-	}
+	}*/
 
 	ret = readl_poll_timeout(ibase + U3D_SSUSB_IP_PW_STS2, value,
 			(value & SSUSB_U2_MAC_SYS_RST_B_STS), 100, 10000);
@@ -514,8 +514,6 @@ static int mtu3_suspend_common(struct device *dev, pm_message_t msg)
 	struct ssusb_mtk *ssusb = dev_get_drvdata(dev);
 	int ret = 0;
 
-	dev_dbg(dev, "%s\n", __func__);
-
 	switch (ssusb->dr_mode) {
 	case USB_DR_MODE_PERIPHERAL:
 		ret = ssusb_gadget_suspend(ssusb, msg);
@@ -557,8 +555,6 @@ static int mtu3_resume_common(struct device *dev, pm_message_t msg)
 {
 	struct ssusb_mtk *ssusb = dev_get_drvdata(dev);
 	int ret;
-
-	dev_dbg(dev, "%s\n", __func__);
 
 	ssusb_wakeup_set(ssusb, false);
 	ret = clk_bulk_prepare_enable(BULK_CLKS_CNT, ssusb->clks);

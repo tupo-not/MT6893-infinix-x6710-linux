@@ -131,8 +131,6 @@ int ssusb_wakeup_of_property_parse(struct ssusb_mtk *ssusb,
 	ssusb->uwk_vers = args.args[1];
 	ssusb->uwk = syscon_node_to_regmap(args.np);
 	of_node_put(args.np);
-	dev_info(ssusb->dev, "uwk - reg:0x%x, version:%d\n",
-			ssusb->uwk_reg_base, ssusb->uwk_vers);
 
 	return PTR_ERR_OR_ZERO(ssusb->uwk);
 }
@@ -151,8 +149,6 @@ static void host_ports_num_get(struct ssusb_mtk *ssusb)
 	ssusb->u2_ports = SSUSB_IP_XHCI_U2_PORT_NUM(xhci_cap);
 	ssusb->u3_ports = SSUSB_IP_XHCI_U3_PORT_NUM(xhci_cap);
 
-	dev_dbg(ssusb->dev, "host - u2_ports:%d, u3_ports:%d\n",
-		 ssusb->u2_ports, ssusb->u3_ports);
 }
 
 /* only configure ports will be used later */
@@ -350,8 +346,6 @@ int ssusb_host_init(struct ssusb_mtk *ssusb, struct device_node *parent_dn)
 
 	ret = of_platform_populate(parent_dn, NULL, NULL, parent_dev);
 	if (ret) {
-		dev_dbg(parent_dev, "failed to create child devices at %pOF\n",
-				parent_dn);
 		return ret;
 	}
 

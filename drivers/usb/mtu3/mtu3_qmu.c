@@ -259,8 +259,6 @@ static int mtu3_prepare_tx_gpd(struct mtu3_ep *mep, struct mtu3_request *mreq)
 	/* get the next GPD */
 	enq = advance_enq_gpd(ring);
 	enq_dma = gpd_virt_to_dma(ring, enq);
-	dev_dbg(mep->mtu->dev, "TX-EP%d queue gpd=%p, enq=%p, qdma=%pad\n",
-		mep->epnum, gpd, enq, &enq_dma);
 
 	enq->dw0_info &= cpu_to_le32(~GPD_FLAGS_HWO);
 	gpd->next_gpd = cpu_to_le32(lower_32_bits(enq_dma));
@@ -302,8 +300,6 @@ static int mtu3_prepare_rx_gpd(struct mtu3_ep *mep, struct mtu3_request *mreq)
 	/* get the next GPD */
 	enq = advance_enq_gpd(ring);
 	enq_dma = gpd_virt_to_dma(ring, enq);
-	dev_dbg(mep->mtu->dev, "RX-EP%d queue gpd=%p, enq=%p, qdma=%pad\n",
-		mep->epnum, gpd, enq, &enq_dma);
 
 	enq->dw0_info &= cpu_to_le32(~GPD_FLAGS_HWO);
 	gpd->next_gpd = cpu_to_le32(lower_32_bits(enq_dma));
@@ -384,7 +380,6 @@ void mtu3_qmu_stop(struct mtu3_ep *mep)
 	qcsr = mep->is_in ? USB_QMU_TQCSR(epnum) : USB_QMU_RQCSR(epnum);
 
 	if (!(mtu3_readl(mbase, qcsr) & QMU_Q_ACTIVE)) {
-		dev_dbg(mtu->dev, "%s's qmu is inactive now!\n", mep->name);
 		return;
 	}
 	mtu3_writel(mbase, qcsr, QMU_Q_STOP);
@@ -402,15 +397,10 @@ void mtu3_qmu_stop(struct mtu3_ep *mep)
 	/* flush fifo again to make sure the fifo is empty */
 	if (mep->is_in)
 		mtu3_setbits(mbase, MU3D_EP_TXCR0(epnum), TX_FLUSHFIFO);
-
-	dev_dbg(mtu->dev, "%s's qmu stop now!\n", mep->name);
 }
 
 void mtu3_qmu_flush(struct mtu3_ep *mep)
 {
-
-	dev_dbg(mep->mtu->dev, "%s flush QMU %s\n", __func__,
-		((mep->is_in) ? "TX" : "RX"));
 
 	/*Stop QMU */
 	mtu3_qmu_stop(mep);
@@ -444,8 +434,6 @@ static void qmu_tx_zlp_error_handler(struct mtu3 *mtu, u8 epnum)
 		dev_err(mtu->dev, "TX EP%d buffer length error(!=0)\n", epnum);
 		return;
 	}
-
-	dev_dbg(mtu->dev, "%s send ZLP for req=%p\n", __func__, mreq);
 	trace_mtu3_zlp_exp_gpd(mep, gpd_current);
 
 	mtu3_clrbits(mbase, MU3D_EP_TXCR0(mep->epnum), TX_DMAREQEN);
@@ -493,9 +481,6 @@ static void qmu_error_rx(struct mtu3 *mtu, u8 epnum)
 	/* by pass the current GDP */
 	gpd_current->dw0_info |= cpu_to_le32(GPD_FLAGS_BPS | GPD_FLAGS_HWO);
 	mtu3_qmu_resume(mep);
-
-	dev_dbg(mtu->dev, "%s EP%d, current=%p, req=%p\n",
-		__func__, epnum, gpd_current, mreq);
 }
 
 /*
@@ -520,9 +505,6 @@ static void qmu_done_tx(struct mtu3 *mtu, u8 epnum)
 	cur_gpd_dma = read_txq_cur_addr(mbase, epnum);
 	gpd_current = gpd_dma_to_virt(ring, cur_gpd_dma);
 
-	dev_dbg(mtu->dev, "%s EP%d, last=%p, current=%p, enq=%p\n",
-		__func__, epnum, gpd, gpd_current, ring->enqueue);
-
 	while (gpd && gpd != gpd_current && !GET_GPD_HWO(gpd)) {
 
 		mreq = next_request(mep);
@@ -540,9 +522,6 @@ static void qmu_done_tx(struct mtu3 *mtu, u8 epnum)
 		gpd = advance_deq_gpd(ring);
 	}
 
-	dev_dbg(mtu->dev, "%s EP%d, deq=%p, enq=%p, complete\n",
-		__func__, epnum, ring->dequeue, ring->enqueue);
-
 }
 
 static void qmu_done_rx(struct mtu3 *mtu, u8 epnum)
@@ -558,9 +537,6 @@ static void qmu_done_rx(struct mtu3 *mtu, u8 epnum)
 
 	cur_gpd_dma = read_rxq_cur_addr(mbase, epnum);
 	gpd_current = gpd_dma_to_virt(ring, cur_gpd_dma);
-
-	dev_dbg(mtu->dev, "%s EP%d, last=%p, current=%p, enq=%p\n",
-		__func__, epnum, gpd, gpd_current, ring->enqueue);
 
 	while (gpd && gpd != gpd_current && !GET_GPD_HWO(gpd)) {
 
@@ -578,9 +554,6 @@ static void qmu_done_rx(struct mtu3 *mtu, u8 epnum)
 
 		gpd = advance_deq_gpd(ring);
 	}
-
-	dev_dbg(mtu->dev, "%s EP%d, deq=%p, enq=%p, complete\n",
-		__func__, epnum, ring->dequeue, ring->enqueue);
 }
 
 static void qmu_done_isr(struct mtu3 *mtu, u32 done_status)
@@ -619,10 +592,6 @@ static void qmu_exception_isr(struct mtu3 *mtu, u32 qmu_status)
 
 	if (qmu_status & RXQ_ZLPERR_INT) {
 		errval = mtu3_readl(mbase, U3D_RQERRIR1);
-		for (i = 1; i < mtu->num_eps; i++) {
-			if (errval & QMU_RX_ZLP_ERR(i))
-				dev_dbg(mtu->dev, "RX EP%d Recv ZLP\n", i);
-		}
 		mtu3_writel(mbase, U3D_RQERRIR1, errval);
 	}
 
@@ -652,9 +621,6 @@ irqreturn_t mtu3_qmu_isr(struct mtu3 *mtu)
 	qmu_done_status = mtu3_readl(mbase, U3D_QISAR0);
 	qmu_done_status &= mtu3_readl(mbase, U3D_QIER0);
 	mtu3_writel(mbase, U3D_QISAR0, qmu_done_status); /* W1C */
-	dev_dbg(mtu->dev, "=== QMUdone[tx=%x, rx=%x] QMUexp[%x] ===\n",
-		(qmu_done_status & 0xFFFF), qmu_done_status >> 16,
-		qmu_status);
 	trace_mtu3_qmu_isr(qmu_done_status, qmu_status);
 
 	if (qmu_done_status)

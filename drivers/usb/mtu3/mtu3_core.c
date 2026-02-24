@@ -42,9 +42,6 @@ static int ep_fifo_alloc(struct mtu3_ep *mep, u32 seg_size)
 	mep->fifo_size = num_bits * MTU3_EP_FIFO_UNIT;
 	mep->fifo_addr = fifo->base + MTU3_EP_FIFO_UNIT * start_bit;
 
-	dev_dbg(mep->mtu->dev, "%s fifo:%#x/%#x, start_bit: %d\n",
-		__func__, mep->fifo_seg_size, mep->fifo_size, start_bit);
-
 	return mep->fifo_addr;
 }
 
@@ -62,9 +59,6 @@ static void ep_fifo_free(struct mtu3_ep *mep)
 	bitmap_clear(fifo->bitmap, start_bit, bits);
 	mep->fifo_size = 0;
 	mep->fifo_seg_size = 0;
-
-	dev_dbg(mep->mtu->dev, "%s size:%#x/%#x, start_bit: %d\n",
-		__func__, mep->fifo_seg_size, mep->fifo_size, start_bit);
 }
 
 /* enable/disable U3D SS function */
@@ -76,7 +70,6 @@ static inline void mtu3_ss_func_set(struct mtu3 *mtu, bool enable)
 	else
 		mtu3_clrbits(mtu->mac_base, U3D_USB3_CONFIG, USB3_EN);
 
-	dev_dbg(mtu->dev, "USB3_EN = %d\n", !!enable);
 }
 
 /* set/clear U3D HS device soft connect */
@@ -89,7 +82,6 @@ static inline void mtu3_hs_softconn_set(struct mtu3 *mtu, bool enable)
 		mtu3_clrbits(mtu->mac_base, U3D_POWER_MANAGEMENT,
 			SOFT_CONN | SUSPENDM_ENABLE);
 	}
-	dev_dbg(mtu->dev, "SOFTCONN = %d\n", !!enable);
 }
 
 /* only port0 of U2/U3 supports device mode */
@@ -265,7 +257,6 @@ static void mtu3_set_speed(struct mtu3 *mtu, enum usb_device_speed speed)
 	}
 
 	mtu->speed = speed;
-	dev_dbg(mtu->dev, "set speed: %s\n", usb_speed_string(speed));
 }
 
 /* CSR registers will be reset to default value if port is disabled */
@@ -334,9 +325,6 @@ void mtu3_ep_stall_set(struct mtu3_ep *mep, bool set)
 	} else {
 		mep->flags |= MTU3_EP_STALL;
 	}
-
-	dev_dbg(mtu->dev, "%s: %s\n", mep->name,
-		set ? "SEND STALL" : "CLEAR STALL, with EP RESET");
 }
 
 void mtu3_dev_on_off(struct mtu3 *mtu, int is_on)
@@ -353,10 +341,6 @@ void mtu3_dev_on_off(struct mtu3 *mtu, int is_on)
 void mtu3_start(struct mtu3 *mtu)
 {
 	void __iomem *mbase = mtu->mac_base;
-
-	dev_dbg(mtu->dev, "%s devctl 0x%x\n", __func__,
-		mtu3_readl(mbase, U3D_DEVICE_CONTROL));
-
 	mtu3_dev_power_on(mtu);
 	mtu3_csr_init(mtu);
 	mtu3_set_speed(mtu, mtu->speed);
@@ -371,7 +355,6 @@ void mtu3_start(struct mtu3 *mtu)
 
 void mtu3_stop(struct mtu3 *mtu)
 {
-	dev_dbg(mtu->dev, "%s\n", __func__);
 
 	mtu3_intr_disable(mtu);
 
@@ -417,8 +400,6 @@ int mtu3_config_ep(struct mtu3 *mtu, struct mtu3_ep *mep,
 		return -ENOMEM;
 	}
 	fifo_sgsz = ilog2(mep->fifo_seg_size);
-	dev_dbg(mtu->dev, "%s fifosz: %x(%x/%x)\n", __func__, fifo_sgsz,
-		mep->fifo_seg_size, mep->fifo_size);
 
 	if (mep->is_in) {
 		csr0 = TX_TXMAXPKTSZ(mep->maxp);
@@ -451,11 +432,6 @@ int mtu3_config_ep(struct mtu3 *mtu, struct mtu3_ep *mep,
 		mtu3_writel(mbase, MU3D_EP_TXCR0(epnum), csr0);
 		mtu3_writel(mbase, MU3D_EP_TXCR1(epnum), csr1);
 		mtu3_writel(mbase, MU3D_EP_TXCR2(epnum), csr2);
-
-		dev_dbg(mtu->dev, "U3D_TX%d CSR0:%#x, CSR1:%#x, CSR2:%#x\n",
-			epnum, mtu3_readl(mbase, MU3D_EP_TXCR0(epnum)),
-			mtu3_readl(mbase, MU3D_EP_TXCR1(epnum)),
-			mtu3_readl(mbase, MU3D_EP_TXCR2(epnum)));
 	} else {
 		csr0 = RX_RXMAXPKTSZ(mep->maxp);
 		csr0 |= RX_DMAREQEN;
@@ -488,17 +464,7 @@ int mtu3_config_ep(struct mtu3 *mtu, struct mtu3_ep *mep,
 		mtu3_writel(mbase, MU3D_EP_RXCR1(epnum), csr1);
 		mtu3_writel(mbase, MU3D_EP_RXCR2(epnum), csr2);
 
-		dev_dbg(mtu->dev, "U3D_RX%d CSR0:%#x, CSR1:%#x, CSR2:%#x\n",
-			epnum, mtu3_readl(mbase, MU3D_EP_RXCR0(epnum)),
-			mtu3_readl(mbase, MU3D_EP_RXCR1(epnum)),
-			mtu3_readl(mbase, MU3D_EP_RXCR2(epnum)));
 	}
-
-	dev_dbg(mtu->dev, "csr0:%#x, csr1:%#x, csr2:%#x\n", csr0, csr1, csr2);
-	dev_dbg(mtu->dev, "%s: %s, fifo-addr:%#x, fifo-size:%#x(%#x/%#x)\n",
-		__func__, mep->name, mep->fifo_addr, mep->fifo_size,
-		fifo_sgsz, mep->fifo_seg_size);
-
 	return 0;
 }
 
@@ -522,8 +488,6 @@ void mtu3_deconfig_ep(struct mtu3 *mtu, struct mtu3_ep *mep)
 
 	mtu3_ep_reset(mep);
 	ep_fifo_free(mep);
-
-	dev_dbg(mtu->dev, "%s: %s\n", __func__, mep->name);
 }
 
 /*
@@ -571,19 +535,12 @@ static void get_ep_fifo_config(struct mtu3 *mtu)
 		bitmap_zero(rx_fifo->bitmap, MTU3_FIFO_BIT_SIZE);
 		mtu->slot = MTU3_U2_IP_SLOT_DEFAULT;
 	}
-
-	dev_dbg(mtu->dev, "%s, TX: base-%d, limit-%d; RX: base-%d, limit-%d\n",
-		__func__, tx_fifo->base, tx_fifo->limit,
-		rx_fifo->base, rx_fifo->limit);
 }
 
 static void mtu3_ep0_setup(struct mtu3 *mtu)
 {
 	u32 maxpacket = mtu->g.ep0->maxpacket;
 	u32 csr;
-
-	dev_dbg(mtu->dev, "%s maxpacket: %d\n", __func__, maxpacket);
-
 	csr = mtu3_readl(mtu->mac_base, U3D_EP0CSR);
 	csr &= ~EP0_MAXPKTSZ_MSK;
 	csr |= EP0_MAXPKTSZ(maxpacket);
@@ -677,7 +634,6 @@ static irqreturn_t mtu3_link_isr(struct mtu3 *mtu)
 	link = mtu3_readl(mbase, U3D_DEV_LINK_INTR);
 	link &= mtu3_readl(mbase, U3D_DEV_LINK_INTR_ENABLE);
 	mtu3_writel(mbase, U3D_DEV_LINK_INTR, link); /* W1C */
-	dev_dbg(mtu->dev, "=== LINK[%x] ===\n", link);
 
 	if (!(link & SSUSB_DEV_SPEED_CHG_INTR))
 		return IRQ_NONE;
@@ -713,7 +669,6 @@ static irqreturn_t mtu3_link_isr(struct mtu3 *mtu)
 		udev_speed = USB_SPEED_UNKNOWN;
 		break;
 	}
-	dev_dbg(mtu->dev, "%s: %s\n", __func__, usb_speed_string(udev_speed));
 	mtu3_dbg_trace(mtu->dev, "link speed %s",
 		       usb_speed_string(udev_speed));
 
@@ -741,7 +696,6 @@ static irqreturn_t mtu3_u3_ltssm_isr(struct mtu3 *mtu)
 	ltssm = mtu3_readl(mbase, U3D_LTSSM_INTR);
 	ltssm &= mtu3_readl(mbase, U3D_LTSSM_INTR_ENABLE);
 	mtu3_writel(mbase, U3D_LTSSM_INTR, ltssm); /* W1C */
-	dev_dbg(mtu->dev, "=== LTSSM[%x] ===\n", ltssm);
 	trace_mtu3_u3_ltssm_isr(ltssm);
 
 	if (ltssm & (HOT_RST_INTR | WARM_RST_INTR))
@@ -772,7 +726,6 @@ static irqreturn_t mtu3_u2_common_isr(struct mtu3 *mtu)
 	u2comm = mtu3_readl(mbase, U3D_COMMON_USB_INTR);
 	u2comm &= mtu3_readl(mbase, U3D_COMMON_USB_INTR_ENABLE);
 	mtu3_writel(mbase, U3D_COMMON_USB_INTR, u2comm); /* W1C */
-	dev_dbg(mtu->dev, "=== U2COMM[%x] ===\n", u2comm);
 	trace_mtu3_u2_common_isr(u2comm);
 
 	if (u2comm & SUSPEND_INTR)
@@ -846,9 +799,6 @@ static void mtu3_check_params(struct mtu3 *mtu)
 		mtu->max_speed = USB_SPEED_HIGH;
 
 	mtu->speed = mtu->max_speed;
-
-	dev_info(mtu->dev, "max_speed: %s\n",
-		 usb_speed_string(mtu->max_speed));
 }
 
 static int mtu3_hw_init(struct mtu3 *mtu)
@@ -865,13 +815,8 @@ static int mtu3_hw_init(struct mtu3 *mtu)
 	/* usb3 ip uses separate fifo */
 	mtu->separate_fifo = mtu->u3_capable;
 
-	dev_info(mtu->dev, "IP version 0x%x(%s IP)\n", mtu->hw_version,
-		mtu->u3_capable ? "U3" : "U2");
-
 	mtu3_check_params(mtu);
-
 	mtu3_device_reset(mtu);
-
 	ret = mtu3_device_enable(mtu);
 	if (ret) {
 		dev_err(mtu->dev, "device enable failed %d\n", ret);
@@ -914,8 +859,6 @@ static int mtu3_set_dma_mask(struct mtu3 *mtu)
 			ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
 		}
 	}
-	dev_info(dev, "dma mask: %s bits\n", is_36bit ? "36" : "32");
-
 	return ret;
 }
 
@@ -940,7 +883,6 @@ int ssusb_gadget_init(struct ssusb_mtk *ssusb)
 		if (mtu->irq < 0)
 			return mtu->irq;
 	}
-	dev_info(dev, "irq %d\n", mtu->irq);
 
 	mtu->mac_base = devm_platform_ioremap_resource_byname(pdev, "mac");
 	if (IS_ERR(mtu->mac_base)) {
@@ -955,9 +897,6 @@ int ssusb_gadget_init(struct ssusb_mtk *ssusb)
 	ssusb->u3d = mtu;
 	mtu->ssusb = ssusb;
 	mtu->max_speed = usb_get_maximum_speed(dev);
-
-	dev_dbg(dev, "mac_base=0x%p, ippc_base=0x%p\n",
-		mtu->mac_base, mtu->ippc_base);
 
 	ret = mtu3_hw_init(mtu);
 	if (ret) {
@@ -988,9 +927,6 @@ int ssusb_gadget_init(struct ssusb_mtk *ssusb)
 	}
 
 	ssusb_dev_debugfs_init(ssusb);
-
-	dev_dbg(dev, " %s() done...\n", __func__);
-
 	return 0;
 
 gadget_err:

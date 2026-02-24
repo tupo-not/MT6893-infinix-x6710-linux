@@ -72,8 +72,6 @@ __acquires(mtu->lock)
 	spin_unlock(&mtu->lock);
 	ret = mtu->gadget_driver->setup(&mtu->g, setup);
 	spin_lock(&mtu->lock);
-
-	dev_dbg(mtu->dev, "%s ret %d\n", __func__, ret);
 	return ret;
 }
 
@@ -81,9 +79,6 @@ static void ep0_write_fifo(struct mtu3_ep *mep, const u8 *src, u16 len)
 {
 	void __iomem *fifo = mep->mtu->mac_base + U3D_FIFO0;
 	u16 index = 0;
-
-	dev_dbg(mep->mtu->dev, "%s: ep%din, len=%d, buf=%p\n",
-		__func__, mep->epnum, len, src);
 
 	if (len >= 4) {
 		iowrite32_rep(fifo, src, len >> 2);
@@ -102,9 +97,6 @@ static void ep0_read_fifo(struct mtu3_ep *mep, u8 *dst, u16 len)
 	void __iomem *fifo = mep->mtu->mac_base + U3D_FIFO0;
 	u32 value;
 	u16 index = 0;
-
-	dev_dbg(mep->mtu->dev, "%s: ep%dout len=%d buf=%p\n",
-		 __func__, mep->epnum, len, dst);
 
 	if (len >= 4) {
 		ioread32_rep(fifo, dst, len >> 2);
@@ -149,8 +141,6 @@ static void ep0_stall_set(struct mtu3_ep *mep0, bool set, u32 pktrdy)
 	mtu->delayed_status = false;
 	mtu->ep0_state = MU3D_EP0_STATE_SETUP;
 
-	dev_dbg(mtu->dev, "ep0: %s STALL, ep0_state: %s\n",
-		set ? "SEND" : "CLEAR", decode_ep0_state(mtu));
 }
 
 static void ep0_do_status_stage(struct mtu3 *mtu)
@@ -177,8 +167,6 @@ static void ep0_set_sel_complete(struct usb_ep *ep, struct usb_request *req)
 
 	mreq = to_mtu3_request(req);
 	mtu = mreq->mtu;
-	dev_dbg(mtu->dev, "u1sel:%d, u1pel:%d, u2sel:%d, u2pel:%d\n",
-		sel.u1_sel, sel.u1_pel, sel.u2_sel, sel.u2_pel);
 }
 
 /* queue data stage to handle 6 byte SET_SEL request */
@@ -221,9 +209,6 @@ ep0_get_status(struct mtu3 *mtu, const struct usb_ctrlrequest *setup)
 			result[0] |= mtu->u2_enable << USB_DEV_STAT_U2_ENABLED;
 		}
 
-		dev_dbg(mtu->dev, "%s result=%x, U1=%x, U2=%x\n", __func__,
-			result[0], mtu->u1_enable, mtu->u2_enable);
-
 		break;
 	case USB_RECIP_INTERFACE:
 		/* status of function remote wakeup, forward request */
@@ -260,7 +245,6 @@ ep0_get_status(struct mtu3 *mtu, const struct usb_ctrlrequest *setup)
 		int ret;
 
 		/* prepare a data stage for GET_STATUS */
-		dev_dbg(mtu->dev, "get_status=%x\n", *(u16 *)result);
 		memcpy(mtu->setup_buf, result, sizeof(result));
 		mtu->ep0_req.mep = mtu->ep0;
 		mtu->ep0_req.request.length = 2;
@@ -281,19 +265,15 @@ static int handle_test_mode(struct mtu3 *mtu, struct usb_ctrlrequest *setup)
 
 	switch (le16_to_cpu(setup->wIndex) >> 8) {
 	case USB_TEST_J:
-		dev_dbg(mtu->dev, "USB_TEST_J\n");
 		mtu->test_mode_nr = TEST_J_MODE;
 		break;
 	case USB_TEST_K:
-		dev_dbg(mtu->dev, "USB_TEST_K\n");
 		mtu->test_mode_nr = TEST_K_MODE;
 		break;
 	case USB_TEST_SE0_NAK:
-		dev_dbg(mtu->dev, "USB_TEST_SE0_NAK\n");
 		mtu->test_mode_nr = TEST_SE0_NAK_MODE;
 		break;
 	case USB_TEST_PACKET:
-		dev_dbg(mtu->dev, "USB_TEST_PACKET\n");
 		mtu->test_mode_nr = TEST_PACKET_MODE;
 		break;
 	default:
@@ -453,7 +433,6 @@ static int handle_standard_request(struct mtu3 *mtu,
 	case USB_REQ_SET_ADDRESS:
 		/* change it after the status stage */
 		mtu->address = (u8) (value & 0x7f);
-		dev_dbg(mtu->dev, "set address to 0x%x\n", mtu->address);
 
 		dev_conf = mtu3_readl(mbase, U3D_DEVICE_CONF);
 		dev_conf &= ~DEV_ADDR_MSK;
@@ -515,8 +494,6 @@ static void ep0_rx_state(struct mtu3 *mtu)
 	u32 csr;
 	u16 count = 0;
 
-	dev_dbg(mtu->dev, "%s\n", __func__);
-
 	csr = mtu3_readl(mbase, U3D_EP0CSR) & EP0_W1C_BITS;
 	mreq = next_ep0_request(mtu);
 	req = &mreq->request;
@@ -539,8 +516,6 @@ static void ep0_rx_state(struct mtu3 *mtu)
 		maxp = mtu->g.ep0->maxpacket;
 		if (count < maxp || req->actual == req->length) {
 			mtu->ep0_state = MU3D_EP0_STATE_SETUP;
-			dev_dbg(mtu->dev, "ep0 state: %s\n",
-				decode_ep0_state(mtu));
 
 			csr |= EP0_DATAEND;
 		} else {
@@ -548,7 +523,6 @@ static void ep0_rx_state(struct mtu3 *mtu)
 		}
 	} else {
 		csr |= EP0_RXPKTRDY | EP0_SENDSTALL;
-		dev_dbg(mtu->dev, "%s: SENDSTALL\n", __func__);
 	}
 
 	mtu3_writel(mbase, U3D_EP0CSR, csr);
@@ -569,8 +543,6 @@ static void ep0_tx_state(struct mtu3 *mtu)
 	u32 count;
 	u32 maxp;
 
-	dev_dbg(mtu->dev, "%s\n", __func__);
-
 	if (!mreq)
 		return;
 
@@ -583,9 +555,6 @@ static void ep0_tx_state(struct mtu3 *mtu)
 	if (count)
 		ep0_write_fifo(mtu->ep0, src, count);
 
-	dev_dbg(mtu->dev, "%s act=%d, len=%d, cnt=%d, maxp=%d zero=%d\n",
-		 __func__, req->actual, req->length, count, maxp, req->zero);
-
 	req->actual += count;
 
 	if ((count < maxp)
@@ -595,9 +564,6 @@ static void ep0_tx_state(struct mtu3 *mtu)
 	/* send it out, triggering a "txpktrdy cleared" irq */
 	csr = mtu3_readl(mtu->mac_base, U3D_EP0CSR) & EP0_W1C_BITS;
 	mtu3_writel(mtu->mac_base, U3D_EP0CSR, csr | EP0_TXPKTRDY);
-
-	dev_dbg(mtu->dev, "%s ep0csr=0x%x\n", __func__,
-		mtu3_readl(mtu->mac_base, U3D_EP0CSR));
 }
 
 static void ep0_read_setup(struct mtu3 *mtu, struct usb_ctrlrequest *setup)
@@ -610,11 +576,6 @@ static void ep0_read_setup(struct mtu3 *mtu, struct usb_ctrlrequest *setup)
 	count = mtu3_readl(mtu->mac_base, U3D_RXCOUNT0);
 
 	ep0_read_fifo(mtu->ep0, (u8 *)setup, count);
-
-	dev_dbg(mtu->dev, "SETUP req%02x.%02x v%04x i%04x l%04x\n",
-		 setup->bRequestType, setup->bRequest,
-		 le16_to_cpu(setup->wValue), le16_to_cpu(setup->wIndex),
-		 le16_to_cpu(setup->wLength));
 
 	/* clean up any leftover transfers */
 	mreq = next_ep0_request(mtu);
@@ -648,9 +609,6 @@ __acquires(mtu->lock)
 	if ((setup.bRequestType & USB_TYPE_MASK) == USB_TYPE_STANDARD)
 		handled = handle_standard_request(mtu, &setup);
 
-	dev_dbg(mtu->dev, "handled %d, ep0_state: %s\n",
-		 handled, decode_ep0_state(mtu));
-
 	if (handled < 0)
 		goto stall;
 	else if (handled > 0)
@@ -659,8 +617,6 @@ __acquires(mtu->lock)
 	handled = forward_to_driver(mtu, &setup);
 	if (handled < 0) {
 stall:
-		dev_dbg(mtu->dev, "%s stall (%d)\n", __func__, handled);
-
 		ep0_stall_set(mtu->ep0, true,
 			le16_to_cpu(setup.wLength) ? 0 : EP0_SETUPPKTRDY);
 
@@ -716,15 +672,12 @@ irqreturn_t mtu3_ep0_isr(struct mtu3 *mtu)
 
 	csr = mtu3_readl(mbase, U3D_EP0CSR);
 
-	dev_dbg(mtu->dev, "%s csr=0x%x\n", __func__, csr);
-
 	/* we sent a stall.. need to clear it now.. */
 	if (csr & EP0_SENTSTALL) {
 		ep0_stall_set(mtu->ep0, false, 0);
 		csr = mtu3_readl(mbase, U3D_EP0CSR);
 		ret = IRQ_HANDLED;
 	}
-	dev_dbg(mtu->dev, "ep0_state: %s\n", decode_ep0_state(mtu));
 	mtu3_dbg_trace(mtu->dev, "ep0_state %s", decode_ep0_state(mtu));
 
 	switch (mtu->ep0_state) {
@@ -752,7 +705,6 @@ irqreturn_t mtu3_ep0_isr(struct mtu3 *mtu)
 
 		mtu->ep0_state = MU3D_EP0_STATE_SETUP;
 		ret = IRQ_HANDLED;
-		dev_dbg(mtu->dev, "ep0_state: %s\n", decode_ep0_state(mtu));
 		break;
 	case MU3D_EP0_STATE_SETUP:
 		if (!(csr & EP0_SETUPPKTRDY))
@@ -760,7 +712,6 @@ irqreturn_t mtu3_ep0_isr(struct mtu3 *mtu)
 
 		len = mtu3_readl(mbase, U3D_RXCOUNT0);
 		if (len != 8) {
-			dev_err(mtu->dev, "SETUP packet len %d != 8 ?\n", len);
 			break;
 		}
 
@@ -798,9 +749,6 @@ static int ep0_queue(struct mtu3_ep *mep, struct mtu3_request *mreq)
 	mreq->mtu = mtu;
 	mreq->request.actual = 0;
 	mreq->request.status = -EINPROGRESS;
-
-	dev_dbg(mtu->dev, "%s %s (ep0_state: %s), len#%d\n", __func__,
-		mep->name, decode_ep0_state(mtu), mreq->request.length);
 
 	switch (mtu->ep0_state) {
 	case MU3D_EP0_STATE_SETUP:
@@ -874,8 +822,6 @@ static int mtu3_ep0_halt(struct usb_ep *ep, int value)
 	mep = to_mtu3_ep(ep);
 	mtu = mep->mtu;
 
-	dev_dbg(mtu->dev, "%s\n", __func__);
-
 	spin_lock_irqsave(&mtu->lock, flags);
 
 	if (!list_empty(&mep->req_list)) {
@@ -895,8 +841,6 @@ static int mtu3_ep0_halt(struct usb_ep *ep, int value)
 		ep0_stall_set(mtu->ep0, true, 0);
 		break;
 	default:
-		dev_dbg(mtu->dev, "ep0 can't halt in state %s\n",
-			decode_ep0_state(mtu));
 		ret = -EINVAL;
 	}
 
