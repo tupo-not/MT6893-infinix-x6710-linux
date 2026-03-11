@@ -196,13 +196,9 @@
 	};
 };
 
-&usb_phy {
-	status = "okay";
-};
+&usb_phy { status = "okay"; };
 
-&usb_host {
-	status = "okay";
-};
+&usb_host { status = "okay"; };
 
 &ssusb {
 	status = "okay";
@@ -211,15 +207,11 @@
 	mediatek,u3p-dis-msk = <1>;
 };
 
-&ufsphy {
-	status = "okay";
-};
+&ufsphy { status = "okay"; };
 
 &ufs {
 	status = "okay";
 	vcc-supply = <&ufs_dummy_vcc>;
 };
 
-&uart0 {
-    status = "okay";
-};
+&uart0 { status = "okay"; };
