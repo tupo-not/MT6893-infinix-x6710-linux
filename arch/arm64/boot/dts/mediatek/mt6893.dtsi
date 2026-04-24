@@ -15,6 +15,8 @@
 #include <dt-bindings/thermal/thermal.h>
 #include <dt-bindings/thermal/mediatek,lvts-thermal.h>
 #include <dt-bindings/pinctrl/mt65xx.h>
+#include <dt-bindings/pinctrl/mt6893-pinfunc.h>
+
 
 / {
 	compatible = "mediatek,mt6893";
@@ -322,11 +324,13 @@
 	};
 
 	performance: performance-controller@11bc10 {
-		compatible = "mediatek,cpufreq-hw";
-		reg = <0 0x0011bc10 0 0x120>, <0 0x0011bd30 0 0x120>,
-		      <0 0x0011be50 0 0x120>;
-		#performance-domain-cells = <1>;
-	};
+    compatible = "mediatek,mt8192-cpufreq-hw", "cpufreq-hw";
+    reg = <0 0x11bc10 0 0x130>,
+          <0 0x11bd30 0 0x130>,
+          <0 0x11be50 0 0x130>;
+    clocks = <&clk13m>;
+    #performance-domain-cells = <1>;
+};
 
 	gpu_opp_table: opp-table-gpu {
 		compatible = "operating-points-v2";
@@ -510,7 +514,7 @@
 			      <0 0x11e70000 0 0x1000>, <0 0x11ea0000 0 0x1000>,
 			      <0 0x11f20000 0 0x1000>, <0 0x11f30000 0 0x1000>,
 			      <0 0x1000b000 0 0x1000>;
-			reg-names = "base", "rm", "bm", "lm", "lb", "rt", "lt", "tm";
+			reg-names = "base", "rm", "bm", "lm", "lb", "rt", "lt", "tm", "eint";
 			gpio-controller;
 			#gpio-cells = <2>;
 			gpio-ranges = <&pio 0 0 220>;
@@ -519,12 +523,11 @@
 			interrupt-controller;
 			#interrupt-cells = <2>;
 		};
-
+		
 		scpsys: syscon@10006000 {
 			compatible = "mediatek,mt6893-scpsys", "syscon", "simple-mfd";
 			reg = <0 0x10006000 0 0x1000>;
 
-			/* System Power Manager */
 			spm: power-controller {
 				compatible = "mediatek,mt6893-power-controller";
 				#address-cells = <1>;
@@ -1068,13 +1071,14 @@
 			clock-names = "sys_ck", "ref_ck", "xhci_ck";
 			#address-cells = <1>;
 			#size-cells = <1>;
+			ranges = <0x11200000 0 0x11200000 0x3f00>;
 			mediatek,syscon-wakeup = <&topckgen 0x214 105>;
 			wakeup-source;
 			status = "disabled";
 
 			usb_host: usb@11200000 {
 				compatible = "mediatek,mt6893-xhci", "mediatek,mtk-xhci";
-				reg = <0 0x11200000 0 0x1000>;
+				reg = <0x11200000 0x1000>;
 				reg-names = "mac";
 				interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH 0>;
 				clocks = <&topckgen CLK_TOP_USB_TOP_SEL>,

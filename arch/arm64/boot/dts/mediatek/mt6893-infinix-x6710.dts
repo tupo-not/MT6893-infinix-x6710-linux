@@ -1,6 +1,8 @@
 /dts-v1/;
 #include "mt6893.dtsi"
 #include "mt6359.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/usb/pd.h>
 
 / {
         model = "Infinix Note 30 VIP";
@@ -56,7 +58,7 @@
                         no-map;
                 };
 
-                0xfa850000 {
+                memory@fa850000 {
                         reg = <0 0xfa850000 0 0x37b0000>;
                         no-map;
                 };
@@ -194,24 +196,84 @@
 		regulator-always-on;
 		regulator-boot-on;
 	};
+
+        vusb33: regulator-vusb33 {
+                compatible = "regulator-fixed";
+                regulator-name = "vusb33";
+                regulator-min-microvolt = <3300000>;
+                regulator-max-microvolt = <3300000>;
+                regulator-always-on;
+        };
+
 };
 
-&usb_phy { status = "okay"; };
+&i2c5 {
+    status = "okay";
+    clock-frequency = <400000>;
+    clock-div = <1>;
 
-&usb_host { status = "okay"; };
+    mt6360: pmic@34 {
+        compatible = "mediatek,mt6360";
+        reg = <0x34>;
+        interrupt-parent = <&pio>;
+        interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
+        interrupt-controller;
+        #interrupt-cells = <1>;
+        wakeup-source;
+
+        charger {
+            compatible = "mediatek,mt6360-chg";
+            richtek,vinovp-microvolt = <14500000>;
+
+            otg_vbus: usb-otg-vbus-regulator {
+                regulator-name = "usb-otg-vbus";
+                regulator-min-microvolt = <4425000>;
+                regulator-max-microvolt = <5825000>;
+            };
+        };
+
+        tcpc {
+            compatible = "mediatek,mt6360-tcpc";
+            interrupts-extended = <&pio 25 IRQ_TYPE_LEVEL_LOW>;
+            interrupt-names = "PD_IRQB";
+
+            connector {
+                compatible = "usb-c-connector";
+                label = "USB-C";
+                power-role = "dual";
+                data-role = "dual";
+                pd-disable;
+
+                port {
+                    typec_hs: endpoint {
+                        remote-endpoint = <&ssusb_hs>;
+                    };
+                };
+            };
+        };
+    };
+};
 
 &ssusb {
-	status = "okay";
-	dr_mode = "peripheral";
-	maximum-speed = "high-speed";
-	mediatek,u3p-dis-msk = <1>;
+    status = "okay";
+    dr_mode = "otg";
+    usb-role-switch;
+    maximum-speed = "high-speed";
+    mediatek,u3p-dis-msk = <1>;
+    mediatek,force-vbus;
+    vbus-supply = <&otg_vbus>;
+    vusb33-supply = <&vusb33>;
+    port { ssusb_hs: endpoint { remote-endpoint = <&typec_hs>; }; };
+};
+
+&usb_host {
+    status = "okay";
+    mediatek,force-vbus;
+    vbus-supply = <&otg_vbus>;
+    vusb33-supply = <&vusb33>;
 };
 
 &ufsphy { status = "okay"; };
-
-&ufs {
-	status = "okay";
-	vcc-supply = <&ufs_dummy_vcc>;
-};
-
+&usb_phy { status = "okay"; };
+&ufs {  status = "okay"; vcc-supply = <&ufs_dummy_vcc>; };
 &uart0 { status = "okay"; };
