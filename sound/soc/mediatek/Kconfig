@@ -287,6 +287,16 @@ config SND_SOC_MT8192
 	  Select Y if you have such device.
 	  If unsure select "N".
 
+config SND_SOC_MT6893_MT6359
+	tristate "ASoC Audio driver for MT6893 with MT6359 codec"
+	depends on SND_SOC_MT8192 && MTK_PMIC_WRAP
+	select SND_SOC_MT6359
+	help
+	  This adds ASoC machine driver for MT6893 boards
+	  with the MT6359 integrated PMIC codec.
+	  Select Y if you have such device.
+	  If unsure select "N".
+
 config SND_SOC_MT8192_MT6359_RT1015_RT5682
 	tristate "ASoC Audio driver for MT8192 with MT6359 RT1015 RT5682 codec"
 	depends on I2C && GPIOLIB
