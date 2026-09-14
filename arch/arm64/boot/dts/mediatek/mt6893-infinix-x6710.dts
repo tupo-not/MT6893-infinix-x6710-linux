@@ -14,7 +14,7 @@
                 #size-cells = <2>;
                 ranges;
 
-                bootargs = "console=tty0 console=ttyS0,921600 clk_ignore_unused regulator_ignore_unused pd_ignore_unused loglevel=7";
+                bootargs = "console=ttyS0,921600 console=tty0 clk_ignore_unused regulator_ignore_unused pd_ignore_unused loglevel=7";
 
                 framebuffer@76a10000 {
                         compatible = "simple-framebuffer";
@@ -251,6 +251,22 @@
                 };
             };
         };
+
+        regulator {
+            mt6360_ldo5: ldo5 {
+                regulator-name = "mt6360,ldo5";
+                regulator-min-microvolt = <2700000>;
+                regulator-max-microvolt = <3700000>;
+                regulator-allowed-modes = <0 2>;
+            };
+
+            mt6360_ldo3: ldo3 {
+                regulator-name = "mt6360,ldo3";
+                regulator-min-microvolt = <1200000>;
+                regulator-max-microvolt = <3700000>;
+                regulator-allowed-modes = <0 2>;
+            };
+        };
     };
 };
 
@@ -277,3 +293,110 @@
 &usb_phy { status = "okay"; };
 &ufs {  status = "okay"; vcc-supply = <&ufs_dummy_vcc>; };
 &uart0 { status = "okay"; };
+
+&kp {
+    status = "okay";
+    keypad,num-rows = <1>;
+    keypad,num-columns = <2>;
+    linux,keymap = <0x00000073 0x00010072>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&kpd_pins>;
+};
+
+&pio {
+    kpd_pins: kpd-default {
+        pins-cmd-dat {
+            pinmux = <PINMUX_GPIO154__FUNC_KPCOL0>;
+            bias-pull-up = <MTK_PUPD_SET_R1R0_10>;
+            input-enable;
+            input-schmitt-enable;
+        };
+    };
+
+    mmc1_default_pins: mmc1-default-pins {
+        pins-clk {
+            pinmux = <PINMUX_GPIO51__FUNC_MSDC1_CLK>;
+            drive-strength = <3>;
+            bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+        };
+
+        pins-cmd-dat {
+            pinmux = <PINMUX_GPIO54__FUNC_MSDC1_DAT0>,
+                <PINMUX_GPIO56__FUNC_MSDC1_DAT1>,
+                <PINMUX_GPIO55__FUNC_MSDC1_DAT2>,
+                <PINMUX_GPIO53__FUNC_MSDC1_DAT3>,
+                <PINMUX_GPIO52__FUNC_MSDC1_CMD>;
+            input-enable;
+            drive-strength = <3>;
+            bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+        };
+    };
+
+    mmc1_uhs_pins: mmc1-uhs-pins {
+        pins-clk {
+            pinmux = <PINMUX_GPIO51__FUNC_MSDC1_CLK>;
+            drive-strength = <3>;
+            bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+        };
+
+        pins-cmd-dat {
+            pinmux = <PINMUX_GPIO54__FUNC_MSDC1_DAT0>,
+                <PINMUX_GPIO56__FUNC_MSDC1_DAT1>,
+                <PINMUX_GPIO55__FUNC_MSDC1_DAT2>,
+                <PINMUX_GPIO53__FUNC_MSDC1_DAT3>,
+                <PINMUX_GPIO52__FUNC_MSDC1_CMD>;
+            input-enable;
+            drive-strength = <3>;
+            bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+        };
+    };
+};
+
+&mmc1 {
+    status = "okay";
+    bus-width = <4>;
+    cap-sd-highspeed;
+    sd-uhs-sdr12;
+    sd-uhs-sdr25;
+    sd-uhs-sdr50;
+    sd-uhs-sdr104;
+    sd-uhs-ddr50;
+    max-frequency = <208000000>;
+    no-sdio;
+    no-mmc;
+    cd-gpios = <&pio 23 GPIO_ACTIVE_HIGH>;
+    vmmc-supply = <&mt6360_ldo5>;
+    vqmmc-supply = <&mt6360_ldo3>;
+    pinctrl-names = "default", "state_uhs";
+    pinctrl-0 = <&mmc1_default_pins>;
+    pinctrl-1 = <&mmc1_uhs_pins>;
+};
+
+&pmic {
+    interrupts-extended = <&pio 222 IRQ_TYPE_LEVEL_HIGH>;
+
+    mpm_keys: keys {
+        compatible = "mediatek,mt6359-keys";
+        power-key {
+            linux,keycodes = <0x74>;
+            wakeup-source;
+        };
+    };
+};
+
+&afe {
+    status = "okay";
+};
+
+/ {
+    sound {
+        compatible = "mediatek,mt6893-mt6359-sound";
+        mediatek,platform = <&afe>;
+        audio-routing =
+            "Headphone Jack", "Headphone L",
+            "Headphone Jack", "Headphone R",
+            "Speakers", "Headphone L Ext Spk Amp",
+            "Speakers", "Headphone R Ext Spk Amp";
+        status = "okay";
+    };
+};

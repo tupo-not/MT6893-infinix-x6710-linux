@@ -316,6 +316,11 @@
 		clock-output-names = "clk26m";
 	};
 
+	mfg_always_on_supply: mfg-always-on-supply {
+		compatible = "regulator-fixed";
+		regulator-name = "mfg_always_on_supply";
+	};
+
 	clk32k: oscillator-32k {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
@@ -544,6 +549,7 @@
 */
 				mfg0: power-domain@MT6893_POWER_DOMAIN_MFG0 {
 					reg = <MT6893_POWER_DOMAIN_MFG0>;
+					domain-supply = <&mfg_always_on_supply>;
 					#address-cells = <1>;
 					#size-cells = <0>;
 					#power-domain-cells = <1>;
@@ -586,13 +592,9 @@
 
 				power-domain@MT6893_POWER_DOMAIN_DISP {
 					reg = <MT6893_POWER_DOMAIN_DISP>;
-					clocks = <&topckgen CLK_TOP_DISP_SEL>,
-						 <&mmsys CLK_MM_SMI_INFRA>,
-						 <&mmsys CLK_MM_SMI_COMMON>,
-						 <&mmsys CLK_MM_SMI_GALS>,
-						 <&mmsys CLK_MM_SMI_IOMMU>;
-					clock-names = "disp", "ss-disp-ifr", "ss-disp-cmn",
-						      "ss-disp-gals", "ss-disp-iommu";
+					status = "disabled";
+					clocks = <&topckgen CLK_TOP_DISP_SEL>;
+					clock-names = "disp";
 					mediatek,infracfg = <&infracfg>;
 					#address-cells = <1>;
 					#size-cells = <0>;
@@ -600,12 +602,8 @@
 
 					power-domain@MT6893_POWER_DOMAIN_MDP {
 						reg = <MT6893_POWER_DOMAIN_MDP>;
-						clocks = <&topckgen CLK_TOP_MDP_SEL>,
-							 <&mdpsys CLK_MDP_SMI0>,
-							 <&mdpsys CLK_MDP_SMI1>,
-							 <&mdpsys CLK_MDP_SMI2>;
-						clock-names = "mdp", "ss-mdp-smi0", "ss-mdp-smi1",
-							      "ss-mdp-smi2";
+						clocks = <&topckgen CLK_TOP_MDP_SEL>;
+						clock-names = "mdp";
 						mediatek,infracfg = <&infracfg>;
 						#power-domain-cells = <0>;
 					};
@@ -630,12 +628,9 @@
 
 					power-domain@MT6893_POWER_DOMAIN_VDEC0 {
 						reg = <MT6893_POWER_DOMAIN_VDEC0>;
-						clocks = <&topckgen CLK_TOP_VDEC_SEL>,
-							 <&vdecsys_soc CLK_VDEC_SOC_VDEC>,
-							 <&vdecsys_soc CLK_VDEC_SOC_LAT>,
-							 <&vdecsys_soc CLK_VDEC_SOC_LARB1>;
-						clock-names = "vdec0", "ss-vdec0-core",
-							      "ss-vdec0-lat", "ss-vdec0-larb";
+						status = "disabled";
+						clocks = <&topckgen CLK_TOP_VDEC_SEL>;
+						clock-names = "vdec0";
 						mediatek,infracfg = <&infracfg>;
 						#address-cells = <1>;
 						#size-cells = <0>;
@@ -643,18 +638,13 @@
 
 						power-domain@MT6893_POWER_DOMAIN_VDEC1 {
 							reg = <MT6893_POWER_DOMAIN_VDEC1>;
-							clocks = <&vdecsys CLK_VDEC_VDEC>,
-								 <&vdecsys CLK_VDEC_LAT>,
-								 <&vdecsys CLK_VDEC_LARB1>;
-							clock-names = "ss-vdec1-core",
-								      "ss-vdec1-lat",
-								      "ss-vdec1-larb";
 							#power-domain-cells = <0>;
 						};
 					};
 
 					power-domain@MT6893_POWER_DOMAIN_DP_TX {
 						reg = <MT6893_POWER_DOMAIN_DP_TX>;
+						status = "disabled";
 						mediatek,infracfg = <&infracfg>;
 						#power-domain-cells = <0>;
 					};
@@ -672,6 +662,7 @@
 
 				power-domain@MT6893_POWER_DOMAIN_ADSP {
 					reg = <MT6893_POWER_DOMAIN_ADSP>;
+					status = "disabled";
 					clocks = <&topckgen CLK_TOP_ADSP_SEL>;
 					clock-names = "adsp";
 					mediatek,infracfg = <&infracfg>;
@@ -685,6 +676,103 @@
 			mediatek,disable-extrst;
 			reg = <0 0x10007000 0 0x100>;
 			#reset-cells = <1>;
+		};
+
+		audsys: clock-controller@11210000 {
+			compatible = "mediatek,mt8192-audsys", "syscon";
+			reg = <0 0x11210000 0 0x2000>;
+			#clock-cells = <1>;
+
+			afe: audio-controller {
+				compatible = "mediatek,mt8192-audio";
+				interrupts = <GIC_SPI 202 IRQ_TYPE_LEVEL_HIGH 0>;
+				resets = <&watchdog 17>;
+				reset-names = "audiosys";
+				power-domains = <&spm MT6893_POWER_DOMAIN_AUDIO>;
+
+				mediatek,apmixedsys = <&apmixedsys>;
+				mediatek,infracfg = <&infracfg>;
+				mediatek,topckgen = <&topckgen>;
+
+				clocks =
+					<&audsys 0>,	/* aud_afe_clk */
+					<&audsys 7>,	/* aud_dac_clk */
+					<&audsys 8>,	/* aud_dac_predis_clk */
+					<&audsys 6>,	/* aud_adc_clk */
+					<&audsys 21>,	/* aud_adda6_adc_clk */
+					<&audsys 1>,	/* aud_apll22m_clk */
+					<&audsys 2>,	/* aud_apll24m_clk */
+					<&audsys 4>,	/* aud_apll1_tuner_clk */
+					<&audsys 3>,	/* aud_apll2_tuner_clk */
+					<&audsys 5>,	/* aud_tdm_clk */
+					<&audsys 9>,	/* aud_tml_clk */
+					<&audsys 10>,	/* aud_nle */
+					<&audsys 18>,	/* aud_dac_hires_clk */
+					<&audsys 19>,	/* aud_adc_hires_clk */
+					<&audsys 20>,	/* aud_adc_hires_tml */
+					<&audsys 22>,	/* aud_adda6_adc_hires_clk */
+					<&audsys 23>,	/* aud_3rd_dac_clk */
+					<&audsys 24>,	/* aud_3rd_dac_predis_clk */
+					<&audsys 25>,	/* aud_3rd_dac_tml */
+					<&audsys 26>,	/* aud_3rd_dac_hires_clk */
+					<&infracfg CLK_INFRA_AO_AUDIO>,
+					<&infracfg CLK_INFRA_AO_AUDIO_26M_BCLK>,
+					<&topckgen CLK_TOP_AUDIO_SEL>,
+					<&topckgen CLK_TOP_AUD_INTBUS_SEL>,
+					<&topckgen CLK_TOP_MAINPLL_D4_D4>,
+					<&topckgen CLK_TOP_AUD_1_SEL>,
+					<&apmixedsys CLK_APMIXED_APLL1>,
+					<&topckgen CLK_TOP_AUD_2_SEL>,
+					<&apmixedsys CLK_APMIXED_APLL2>,
+					<&topckgen CLK_TOP_APLL1_D4>,
+					<&topckgen CLK_TOP_APLL2_D4>,
+					<&topckgen CLK_TOP_AUDIO_H_SEL>,
+					<&clk26m>;
+				clock-names =
+					"aud_afe_clk",
+					"aud_dac_clk",
+					"aud_dac_predis_clk",
+					"aud_adc_clk",
+					"aud_adda6_adc_clk",
+					"aud_apll22m_clk",
+					"aud_apll24m_clk",
+					"aud_apll1_tuner_clk",
+					"aud_apll2_tuner_clk",
+					"aud_tdm_clk",
+					"aud_tml_clk",
+					"aud_nle",
+					"aud_dac_hires_clk",
+					"aud_adc_hires_clk",
+					"aud_adc_hires_tml",
+					"aud_adda6_adc_hires_clk",
+					"aud_3rd_dac_clk",
+					"aud_3rd_dac_predis_clk",
+					"aud_3rd_dac_tml",
+					"aud_3rd_dac_hires_clk",
+					"aud_infra_clk",
+					"aud_infra_26m_clk",
+					"top_mux_audio",
+					"top_mux_audio_int",
+					"top_mainpll_d4_d4",
+					"top_mux_aud_1",
+					"top_apll1_ck",
+					"top_mux_aud_2",
+					"top_apll2_ck",
+					"top_apll1_d4",
+					"top_apll2_d4",
+					"top_mux_audio_h",
+					"top_clk26m_clk";
+			};
+		};
+
+		kp: kp@10010000 {
+			compatible = "mediatek,mt6893-keypad", "mediatek,mt6779-keypad";
+			reg = <0 0x10010000 0 0x1000>;
+			interrupts = <GIC_SPI 74 IRQ_TYPE_EDGE_RISING 0>;
+			clocks = <&clk26m>;
+			clock-names = "kpd";
+			wakeup-source;
+			status = "disabled";
 		};
 
 		apmixedsys: syscon@1000c000 {
@@ -710,7 +798,7 @@
 		};
 
 		pwrap: pwrap@10026000 {
-			compatible = "mediatek,mt6893-pwrap", "syscon";
+			compatible = "mediatek,mt6873-pwrap";
 			reg = <0 0x10026000 0 0x1000>;
 			reg-names = "pwrap";
 			interrupts = <GIC_SPI 220 IRQ_TYPE_LEVEL_HIGH 0>;
@@ -1129,20 +1217,18 @@
 			clock-names = "source", "hclk", "source_cg";
 			status = "disabled";
 		};
-/*
-		mmc1: mmc@11240000 {
+mmc1: mmc@11240000 {
 			compatible = "mediatek,mt6893-mmc", "mediatek,mt8183-mmc";
-			reg = <0 0x11240000 0 0x1000>, <0 0x11c70000 0 0x1000>;
+			reg = <0 0x11240000 0 0x1000>, <0 0x11e10000 0 0x1000>;
 			interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH 0>;
 			clocks = <&topckgen CLK_TOP_MSDC30_1_SEL>,
 				 <&infracfg CLK_INFRA_AO_MSDC1>,
 				 <&infracfg CLK_INFRA_AO_MSDC1_SRC>;
 			clock-names = "source", "hclk", "source_cg";
-			assigned-clocks = <&topckgen CLK_TOP_MSDC30_1>;
+			assigned-clocks = <&topckgen CLK_TOP_MSDC30_1_SEL>;
 			assigned-clock-parents = <&topckgen CLK_TOP_MSDCPLL_D2>;
 			status = "disabled";
 		};
-*/
 		efuse: efuse@11c10000 {
 			compatible = "mediatek,mt6893-efuse", "mediatek,efuse";
 			reg = <0 0x11c10000 0 0x1000>;
